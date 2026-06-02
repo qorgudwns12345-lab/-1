@@ -1,0 +1,312 @@
+# 7) 실습 1 — churn_logit1.csv
+# 문제
+# 구독형 서비스 기업이 고객 이탈 여부(churn)를 예측하기 위해age, usage_hour, complaint_cnt를 설명변수로 사용하였다.어떤 변수가 이탈에 영향을 주는지 로지스틱 회귀로 분석하라.
+
+# 강의 포인트
+# • 종속변수: churn(0/1)
+# • 설명변수: age, usage_hour, complaint_cnt
+# • 확인할 것:
+# 1. 회귀계수 부호
+# 2. p-value 유의성
+# 3. 오즈비
+# 4. 해석 문장
+
+# Python 실습 코드
+# [실습 1] churn_logit1.csv 로지스틱 회귀: 이탈 여부와 오즈비 해석
+
+import pandas as pd
+import numpy as np
+import statsmodels.formula.api as smf
+from pathlib import Path
+
+DATA_DIR = Path('/content')  # 필요시 수정
+df = pd.read_csv(DATA_DIR / 'churn_logit1.csv')
+
+print("=== 데이터 미리보기 ===")
+print(df.head())
+print("\n=== 기본 정보 ===")
+print(df.info())
+
+# 로지스틱 회귀 적합
+model = smf.logit('churn ~ age + usage_hour + complaint_cnt', data=df).fit()
+
+print("\n=== 로지스틱 회귀 요약 ===")
+print(model.summary())
+
+# 계수표 정리
+result_table = pd.DataFrame({
+    'coef': model.params,
+    'p_value': model.pvalues,
+    'odds_ratio': np.exp(model.params)
+})
+
+print("\n=== 계수 / p-value / 오즈비 ===")
+print(result_table)
+
+# 95% 신뢰구간과 오즈비 기준으로도 보기
+conf = model.conf_int() #interval
+conf.columns = ['2.5%', '97.5%']
+conf['OR_2.5%'] = np.exp(conf['2.5%'])   #odd비는 exp
+conf['OR_97.5%'] = np.exp(conf['97.5%'])
+
+print("\n=== 계수 신뢰구간 및 오즈비 신뢰구간 ===")
+print(conf)
+
+# 예측확률 및 분류
+df['pred_prob'] = model.predict(df)
+df['pred_class'] = (df['pred_prob'] >= 0.5).astype(int) #결과를 정수로
+
+print("\n=== 예측확률 상위 5개 ===")
+print(df[['churn', 'pred_prob', 'pred_class']].head())
+
+# 해석용 출력
+print("\n=== 해석 가이드 ===")
+for var in ['age', 'usage_hour', 'complaint_cnt']:
+    coef = model.params[var]
+    pval = model.pvalues[var]
+    or_val = np.exp(coef)
+    direction = '증가' if coef > 0 else '감소'
+    print(f"{var}: 계수={coef:.4f}, p-value={pval:.6f}, 오즈비={or_val:.4f}")
+    print(f" -> {var}가 1단위 증가할 때 이탈 odds는 약 {or_val:.4f}배가 되며, 방향은 {direction}입니다.")
+# 8) 실습 2 — loan_default_logit2.csv
+# 문제
+# 은행은 고객의 대출 연체 여부(default)를 예측하기 위해income, debt_ratio, late_cnt를 설명변수로 사용하였다.이 모형의 적합도와 예측 성능을 평가하라.
+
+# 강의 포인트
+# • 종속변수: default(0/1)
+# • 설명변수: income, debt_ratio, late_cnt
+# • 확인할 것:
+# 1. 회귀계수와 오즈비
+# 2. 로그우도(llf)
+# 3. residual deviance
+# 4. accuracy, error rate
+
+# Python 실습 코드
+# [실습 2] loan_default_logit2.csv 로지스틱 회귀: 분류 성능과 residual deviance
+
+import pandas as pd
+import numpy as np
+import statsmodels.formula.api as smf
+from sklearn.metrics import accuracy_score
+from pathlib import Path
+
+DATA_DIR = Path('/content')  # 필요시 수정
+df = pd.read_csv(DATA_DIR / 'loan_default_logit2.csv')
+
+print("=== 데이터 미리보기 ===")
+print(df.head())
+print("\n=== 기본 정보 ===")
+print(df.info())
+
+# 로지스틱 회귀 적합
+model = smf.logit('default ~ income + debt_ratio + late_cnt', data=df).fit()
+
+print("\n=== 로지스틱 회귀 요약 ===")
+print(model.summary())
+
+# 계수 / p-value / 오즈비
+result_table = pd.DataFrame({
+    'coef': model.params,
+    'p_value': model.pvalues,
+    'odds_ratio': np.exp(model.params)   #오즈비는 exp
+})
+print("\n=== 계수 / p-value / 오즈비 ===")
+print(result_table)
+
+# 로그우도와 residual deviance
+llf = model.llf
+residual_deviance = -2 * llf
+print("\n=== 적합도 지표 ===")
+print(f"log-likelihood (llf): {llf:.4f}")
+print(f"residual deviance: {residual_deviance:.4f}")
+
+# 예측확률, 예측분류
+df['pred_prob'] = model.predict(df)
+df['pred_class'] = (df['pred_prob'] >= 0.5).astype(int) #정수로 변환
+
+# 성능지표
+acc = accuracy_score(df['default'], df['pred_class'])
+err = 1 - acc
+
+print("\n=== 분류 성능 ===")
+print(f"accuracy     : {acc:.4f}")
+print(f"error rate   : {err:.4f}")
+
+# 예측확률 일부 확인
+print("\n=== 예측확률 상위 10개 ===")
+print(df[['default', 'pred_prob', 'pred_class']].head(10))
+
+# 신뢰구간
+conf = model.conf_int()
+conf.columns = ['2.5%', '97.5%']
+conf['OR_2.5%'] = np.exp(conf['2.5%'])
+conf['OR_97.5%'] = np.exp(conf['97.5%'])
+
+print("\n=== 계수 신뢰구간 및 오즈비 신뢰구간 ===")
+print(conf)
+
+# 해석용 출력
+print("\n=== 해석 가이드 ===")
+for var in ['income', 'debt_ratio', 'late_cnt']:
+    coef = model.params[var]
+    pval = model.pvalues[var]
+    or_val = np.exp(coef)
+    print(f"{var}: 계수={coef:.6f}, p-value={pval:.6f}, 오즈비={or_val:.6f}")
+
+
+=== 데이터 미리보기 ===
+   churn  age  usage_hour  complaint_cnt
+0      0   29       12.07              0
+1      0   20       70.05              2
+2      0   23       58.09              0
+3      0   37       67.25              2
+4      0   54       78.19              0
+
+=== 기본 정보 ===
+<class 'pandas.core.frame.DataFrame'>
+RangeIndex: 500 entries, 0 to 499
+Data columns (total 4 columns):
+ #   Column         Non-Null Count  Dtype  
+---  ------         --------------  -----  
+ 0   churn          500 non-null    int64  
+ 1   age            500 non-null    int64  
+ 2   usage_hour     500 non-null    float64
+ 3   complaint_cnt  500 non-null    int64  
+dtypes: float64(1), int64(3)
+memory usage: 15.8 KB
+None
+Optimization terminated successfully.
+         Current function value: 0.237853
+         Iterations 7
+
+=== 로지스틱 회귀 요약 ===
+                           Logit Regression Results                           
+==============================================================================
+Dep. Variable:                  churn   No. Observations:                  500
+Model:                          Logit   Df Residuals:                      496
+Method:                           MLE   Df Model:                            3
+Date:                Sun, 31 May 2026   Pseudo R-squ.:                  0.1754
+Time:                        12:39:03   Log-Likelihood:                -118.93
+converged:                       True   LL-Null:                       -144.22
+Covariance Type:            nonrobust   LLR p-value:                 6.016e-11
+=================================================================================
+                    coef    std err          z      P>|z|      [0.025      0.975]
+---------------------------------------------------------------------------------
+Intercept        -1.2848      0.694     -1.852      0.064      -2.645       0.075
+age              -0.0234      0.014     -1.615      0.106      -0.052       0.005
+usage_hour       -0.0384      0.009     -4.249      0.000      -0.056      -0.021
+complaint_cnt     0.6561      0.127      5.151      0.000       0.406       0.906
+=================================================================================
+
+=== 계수 / p-value / 오즈비 ===
+                   coef       p_value  odds_ratio
+Intercept     -1.284755  6.409071e-02    0.276718
+age           -0.023406  1.063632e-01    0.976865
+usage_hour    -0.038432  2.147205e-05    0.962297
+complaint_cnt  0.656089  2.591138e-07    1.927240
+
+=== 계수 신뢰구간 및 오즈비 신뢰구간 ===
+                   2.5%     97.5%   OR_2.5%  OR_97.5%
+Intercept     -2.644738  0.075228  0.071024  1.078130
+age           -0.051817  0.005004  0.949503  1.005016
+usage_hour    -0.056160 -0.020704  0.945388  0.979509
+complaint_cnt  0.406446  0.905732  1.501471  2.473743
+
+=== 예측확률 상위 5개 ===
+   churn  pred_prob  pred_class
+0      0   0.081106           0
+1      0   0.041772           0
+2      0   0.017030           0
+3      0   0.031579           0
+4      0   0.003858           0
+
+=== 해석 가이드 ===
+age: 계수=-0.0234, p-value=0.106363, 오즈비=0.9769
+ -> age가 1단위 증가할 때 이탈 odds는 약 0.9769배가 되며, 방향은 감소입니다.
+usage_hour: 계수=-0.0384, p-value=0.000021, 오즈비=0.9623
+ -> usage_hour가 1단위 증가할 때 이탈 odds는 약 0.9623배가 되며, 방향은 감소입니다.
+complaint_cnt: 계수=0.6561, p-value=0.000000, 오즈비=1.9272
+ -> complaint_cnt가 1단위 증가할 때 이탈 odds는 약 1.9272배가 되며, 방향은 증가입니다.
+=== 데이터 미리보기 ===
+   default   income  debt_ratio  late_cnt
+0        0  3313.39       0.265         2
+1        0  4026.60       0.305         0
+2        0  3262.68       0.684         2
+3        0  4087.12       1.031         0
+4        0  2397.14       0.178         0
+
+=== 기본 정보 ===
+<class 'pandas.core.frame.DataFrame'>
+RangeIndex: 600 entries, 0 to 599
+Data columns (total 4 columns):
+ #   Column      Non-Null Count  Dtype  
+---  ------      --------------  -----  
+ 0   default     600 non-null    int64  
+ 1   income      600 non-null    float64
+ 2   debt_ratio  600 non-null    float64
+ 3   late_cnt    600 non-null    int64  
+dtypes: float64(2), int64(2)
+memory usage: 18.9 KB
+None
+Optimization terminated successfully.
+         Current function value: 0.426514
+         Iterations 6
+
+=== 로지스틱 회귀 요약 ===
+                           Logit Regression Results                           
+==============================================================================
+Dep. Variable:                default   No. Observations:                  600
+Model:                          Logit   Df Residuals:                      596
+Method:                           MLE   Df Model:                            3
+Date:                Sun, 31 May 2026   Pseudo R-squ.:                  0.1477
+Time:                        12:39:03   Log-Likelihood:                -255.91
+converged:                       True   LL-Null:                       -300.24
+Covariance Type:            nonrobust   LLR p-value:                 4.238e-19
+==============================================================================
+                 coef    std err          z      P>|z|      [0.025      0.975]
+------------------------------------------------------------------------------
+Intercept     -1.7772      0.413     -4.302      0.000      -2.587      -0.967
+income        -0.0003   5.94e-05     -5.422      0.000      -0.000      -0.000
+debt_ratio     2.0093      0.370      5.433      0.000       1.284       2.734
+late_cnt       0.4774      0.101      4.739      0.000       0.280       0.675
+==============================================================================
+
+=== 계수 / p-value / 오즈비 ===
+                coef       p_value  odds_ratio
+Intercept  -1.777208  1.695477e-05    0.169110
+income     -0.000322  5.892164e-08    0.999678
+debt_ratio  2.009343  5.554017e-08    7.458417
+late_cnt    0.477399  2.146767e-06    1.611877
+
+=== 적합도 지표 ===
+log-likelihood (llf): -255.9086
+residual deviance: 511.8172
+
+=== 분류 성능 ===
+accuracy     : 0.8150
+error rate   : 0.1850
+
+=== 예측확률 상위 10개 ===
+   default  pred_prob  pred_class
+0        0   0.204746           0
+1        0   0.078639           0
+2        0   0.377859           0
+3        0   0.264700           0
+4        0   0.100520           0
+5        0   0.182376           0
+6        0   0.242458           0
+7        0   0.110946           0
+8        0   0.158177           0
+9        1   0.487071           0
+
+=== 계수 신뢰구간 및 오즈비 신뢰구간 ===
+                2.5%     97.5%   OR_2.5%   OR_97.5%
+Intercept  -2.586962 -0.967453  0.075248   0.380050
+income     -0.000438 -0.000206  0.999562   0.999794
+debt_ratio  1.284415  2.734271  3.612555  15.398516
+late_cnt    0.279960  0.674839  1.323076   1.963717
+
+=== 해석 가이드 ===
+income: 계수=-0.000322, p-value=0.000000, 오즈비=0.999678
+debt_ratio: 계수=2.009343, p-value=0.000000, 오즈비=7.458417
+late_cnt: 계수=0.477399, p-value=0.000002, 오즈비=1.611877
